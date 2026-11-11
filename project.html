@@ -693,7 +693,13 @@ function startPage(run) {
   var lg = $('#logoHome');
   if (lg && !lg.dataset.custom) lg.addEventListener('click', function (e) { if (window.goHome) { e.preventDefault(); goHome(); window.scrollTo(0, 0); } });
   var had = !!lastEmail();
-  function reveal() { var m = $('#main'); if (m && m.textContent.trim() !== 'Loading…' && window.FL_LOADER_API) FL_LOADER_API.hideSplash(); }  // saved data on screen: drop the splash
+  // saved data on screen: keep the logo splash up for a short moment (the same opening as the other portals), then show the page
+  // while fresh data loads under the green top bar. With nothing saved, the loader drops the splash when the first reply arrives.
+  var SPLASH_MIN = 1100;
+  function reveal() {
+    var m = $('#main'); if (!(m && m.textContent.trim() !== 'Loading…' && window.FL_LOADER_API)) return;
+    setTimeout(FL_LOADER_API.hideSplash, Math.max(0, SPLASH_MIN - (window.performance ? performance.now() : 0)));
+  }
   if (had && !readAuth()) { run(true); reveal(); }             // show saved data while a quiet sign-in runs
   requireLogin(had).then(function () { syncPill(); run(false); reveal(); if (queue().length) flushQueue(); });
 }

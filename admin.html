@@ -190,7 +190,7 @@ details.intdet>summary{cursor:pointer;font-weight:700;color:var(--grey);font-siz
 </style>
 </head>
 <body>
-<script>window.FL_LOADER={"messages": {"adminDeleteProject": "Deleting the project\u2026", "adminDeleteEstimate": "Deleting\u2026"}, "app": "Solution Calc", "logoKeys": ["slc_logo", "pp_logo", "sc_logo"]}</script>
+<script>window.FL_LOADER={"messages": {"adminDeleteProject": "Deleting the project\u2026", "adminDeleteEstimate": "Deleting the estimate\u2026", "adminSaveConstant": "Saving the parameter\u2026", "adminSaveSpec": "Saving the parameter\u2026", "saveProject": "Saving the project\u2026"}, "app": "Solution Calc", "logoKeys": ["slc_logo", "pp_logo", "sc_logo"]}</script>
 <!-- FL-LOADER v1: Forwardlog loading signs (splash, top bar, button spinner, long-job card). Paste right after <body>. -->
 <style id="fl-loader-css">
 #fl-splash{position:fixed;inset:0;z-index:9999;background:#F3F5F2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .3s ease}
@@ -693,7 +693,13 @@ function startPage(run) {
   var lg = $('#logoHome');
   if (lg && !lg.dataset.custom) lg.addEventListener('click', function (e) { if (window.goHome) { e.preventDefault(); goHome(); window.scrollTo(0, 0); } });
   var had = !!lastEmail();
-  function reveal() { var m = $('#main'); if (m && m.textContent.trim() !== 'Loading…' && window.FL_LOADER_API) FL_LOADER_API.hideSplash(); }  // saved data on screen: drop the splash
+  // saved data on screen: keep the logo splash up for a short moment (the same opening as the other portals), then show the page
+  // while fresh data loads under the green top bar. With nothing saved, the loader drops the splash when the first reply arrives.
+  var SPLASH_MIN = 1100;
+  function reveal() {
+    var m = $('#main'); if (!(m && m.textContent.trim() !== 'Loading…' && window.FL_LOADER_API)) return;
+    setTimeout(FL_LOADER_API.hideSplash, Math.max(0, SPLASH_MIN - (window.performance ? performance.now() : 0)));
+  }
   if (had && !readAuth()) { run(true); reveal(); }             // show saved data while a quiet sign-in runs
   requireLogin(had).then(function () { syncPill(); run(false); reveal(); if (queue().length) flushQueue(); });
 }
