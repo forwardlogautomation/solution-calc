@@ -363,11 +363,30 @@ var SC = (function () {
     v.efficiency = v.robotsNeeded * v.effPerRobot;
   }
 
-  var CALC = {
+  /* values looked up from a ModelSpecs table by the chosen tote size / model (shown as soon as one is picked) */
+  var LOOKUP = {
     airrob_std: function (v, sp) {
       var t = (sp.tote || {})[v.toteSize];
       if (!t) throw new Error('Unknown tote size "' + v.toteSize + '". Pick one from the list.');
       v.toteL = t.L; v.toteW = t.W; v.toteH = t.H; v.toteGap = t.gap; v.toteBeamClr = t.clr; v.floorToBeam = t.floor;
+    },
+    wheel: function (v, sp) {
+      var m = (sp.wheel || {})[v.model];
+      if (!m) throw new Error('Unknown wheel sorter model "' + v.model + '". Pick one from the list.');
+      v.sorterL = m.sorterL; v.sorterW = m.sorterW; v.maxL = m.maxL; v.maxW = m.maxW; v.spacer1 = m.spacer1;
+    }
+  };
+  function lookups(code, given, specs) {
+    var v = cleanInputs(code, given), out = {};
+    if (!LOOKUP[code]) return out;
+    try { LOOKUP[code](v, specMap(specs)); } catch (e) { return out; }
+    BY[code].fields.forEach(function (f) { if (f.type === 'lookup') out[f.key] = v[f.key]; });
+    return out;
+  }
+
+  var CALC = {
+    airrob_std: function (v, sp) {
+      LOOKUP.airrob_std(v, sp);
       airrob(v);
     },
     airrob_custom: function (v) {
@@ -408,9 +427,7 @@ var SC = (function () {
       v.noCharge = b;                                   // the workbook's "Without charging" column, for display
     },
     wheel: function (v, sp) {
-      var m = (sp.wheel || {})[v.model];
-      if (!m) throw new Error('Unknown wheel sorter model "' + v.model + '". Pick one from the list.');
-      v.sorterL = m.sorterL; v.sorterW = m.sorterW; v.maxL = m.maxL; v.maxW = m.maxW; v.spacer1 = m.spacer1;
+      LOOKUP.wheel(v, sp);
       v.wheelSorters = ROUNDUP(((EVEN(v.chutes) / 2) * v.chuteOpening) / v.sorterW);
     }
   };
@@ -437,7 +454,7 @@ var SC = (function () {
     return v;
   }
 
-  return { compute: compute, defaults: defaults, cleanInputs: cleanInputs, missing: missing, constMap: constMap, specMap: specMap, models: models,
+  return { compute: compute, defaults: defaults, cleanInputs: cleanInputs, missing: missing, lookups: lookups, constMap: constMap, specMap: specMap, models: models,
     solution: function (c) { return BY[c]; }, solutions: SC_SPEC.solutions, fn: { TRUNC: TRUNC, ROUNDUP: ROUNDUP, MOD: MOD, EVEN: EVEN, x15: x15 } };
 })();
 
