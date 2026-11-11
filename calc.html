@@ -721,6 +721,15 @@ function draftKey() { return K + 'draft_' + S.code + '_' + (EID || PID0 || 'quic
 $('#back').onclick = function () { var p = (S.project && S.project.projectId) || PID0; goBack(p ? 'project.html?p=' + encodeURIComponent(p) : './'); };
 
 function seedRef() { return { constants: SC_SPEC.constants, specs: SC_SPEC.specs }; }
+/* Reference data saved on this device before an update can lack values the new pages need (a new constant or tote type):
+   fill those from the built-in seed until the server's own copy arrives, so nothing is missing on the first visit. */
+function withSeed(ref) {
+  ref = ref || {}; var cs = (ref.constants || []).slice(), ss = (ref.specs || []).slice(), hc = {}, hs = {};
+  cs.forEach(function (c) { hc[c.solution + '|' + c.key] = 1; }); ss.forEach(function (s) { hs[s.table + '|' + s.model + '|' + s.key] = 1; });
+  SC_SPEC.constants.forEach(function (c) { if (!hc[c.solution + '|' + c.key]) cs.push(c); });
+  SC_SPEC.specs.forEach(function (s) { if (!hs[s.table + '|' + s.model + '|' + s.key]) ss.push(s); });
+  var o = {}; for (var k in ref) o[k] = ref[k]; o.constants = cs; o.specs = ss; return o;
+}
 
 function run(cachedOnly) {
   if (!S.built) {
@@ -736,7 +745,7 @@ function run(cachedOnly) {
   if (cachedOnly) return;
   var req = EID ? api('getEstimate', [EID]) : api('getCalcContext', [PID0 || '']);
   return req.then(function (d) {
-    setRefData(d); S.refLive = true;
+    setRefData(d); S.refLive = true; d = withSeed(d);
     if (EID) { cacheSet('est_' + EID, d); if (!S.built) applyEstimate(d); else { S.ref = d; S.project = d.project; S.me = d.me; header(); recalc(); } }
     else { S.ref = d; S.project = d.project; S.me = d.me; header(); recalc(); }
     showAdminLink(d.me);
@@ -760,7 +769,7 @@ function withBlanks(code, raw, fresh) {
   return o;
 }
 function setup(code, inputs, project, ref, me) {
-  S.code = code; S.s = SC.solution(code); S.project = project; S.ref = ref; S.me = me;
+  S.code = code; S.s = SC.solution(code); S.project = project; S.ref = withSeed(ref); S.me = me;
   S.base = withBlanks(code, inputs, !inputs);
   S.inputs = JSON.parse(JSON.stringify(S.base));
   var dr = null; try { dr = JSON.parse(ls(draftKey()) || 'null'); } catch (e) { }
