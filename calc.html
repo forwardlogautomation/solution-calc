@@ -175,15 +175,16 @@ details.more summary{cursor:pointer;font-weight:700;color:var(--grey);font-size:
   .rep .estblock:first-of-type{break-before:auto}
 }
 
-.asum .sr{display:grid;grid-template-columns:1fr;gap:4px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.22)}
-.asum .sl{font-size:13px;font-weight:600;opacity:.92}
-.asum .sv{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px}.asum .sv b{font-size:20px;font-weight:800;margin-right:3px}
-.asum .tot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0 2px}
-.asum .tot .sl{flex:1 1 auto;min-width:0}
-.asum .hv{flex:0 0 auto;white-space:nowrap;background:#FFF4B8;color:#3A3200;font-weight:800;font-size:24px;border-radius:9px;padding:4px 12px;min-width:110px;text-align:center}
-.asum .tot.main .hv{font-size:clamp(26px,8vw,34px)}
-@media (min-width:640px){.asum .sr{grid-template-columns:240px 1fr;align-items:center}}
-@media print{.asum .sr{border-bottom-color:var(--line)}.asum .hv{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.card.hero table.asum{margin-top:16px;border-collapse:separate;border-spacing:0;background:rgba(255,255,255,.1);border-radius:12px;overflow:hidden}
+.card.hero table.asum th{color:rgba(255,255,255,.75);font-size:10.5px;letter-spacing:.6px;text-align:right;padding:10px 12px 8px;border-bottom:1px solid rgba(255,255,255,.18)}
+.card.hero table.asum td{color:#fff;text-align:right;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.12);font-variant-numeric:tabular-nums;font-size:18px;font-weight:800}
+.card.hero table.asum tr:last-child td{border-bottom:0}
+.card.hero table.asum th:not(:first-child),.card.hero table.asum td:not(:first-child){width:19%}
+@media (min-width:700px){.card.hero table.asum{max-width:640px}}
+.card.hero table.asum th:first-child,.card.hero table.asum td:first-child{text-align:left}
+.card.hero table.asum td:first-child{font-size:13.5px;font-weight:600}
+@media (max-width:420px){.card.hero table.asum th,.card.hero table.asum td{padding:9px 8px}.card.hero table.asum td{font-size:16px}.card.hero table.asum td:first-child{font-size:12.5px}}
+@media print{.card.hero table.asum{background:#F3F5F2}.card.hero table.asum th{color:var(--grey);border-bottom-color:var(--line)}.card.hero table.asum td{color:var(--ink);border-bottom-color:var(--line)}}
 details.intdet>summary{cursor:pointer;font-weight:700;color:var(--grey);font-size:13px;text-transform:uppercase;letter-spacing:.8px}
 </style>
 </head>
@@ -721,18 +722,17 @@ function readProjectForm(o, id) {
   return { projectId: id || '', name: $('#pf_name', o).value.trim(), client: $('#pf_client', o).value.trim(), site: $('#pf_site', o).value.trim(), pm: $('#pf_pm', o).value.trim(), status: $('#pf_status', o).value };
 }
 
-/* AIRROB sales summary: the layout of the workbook's result box (racks by layer, total cells, allowable totes) */
+/* AIRROB sales summary: allowable totes first, total cells beside it, then the rack layout as a small table */
 function isAirrob(code) { return /^airrob/.test(code || ''); }
 function airrobSummary(v, title) {
   var n = function (x) { return fmtNum(x).replace(/<[^>]+>/g, ''); };
-  var row = function (label, levels, totes, groups) {
-    return '<div class="sr"><div class="sl">' + label + '</div><div class="sv"><span><b>' + n(levels) + '</b> levels</span><span><b>' + n(totes) + '</b> totes per group</span><span><b>' + n(groups) + '</b> groups</span></div></div>';
-  };
-  return '<h2>' + esc(title || 'AIRROB') + '</h2><div class="asum">' +
-    row('Single-layer display of racks', v.levels, v.totesSingleBay, v.singleBays) +
-    row('Double-layer display of racks', v.levels, v.totesDoubleBay, v.doubleBays) +
-    '<div class="tot"><div class="sl">Total cells that can be used for AIRROB</div><div class="hv">' + n(v.maxTotes) + '</div></div>' +
-    '<div class="tot main"><div class="sl">Allowable number of totes for AIRROB</div><div class="hv">' + n(v.allowTotes) + '</div></div></div>';
+  var pct = v.maxTotes ? Math.round(v.allowTotes / v.maxTotes * 100) : 0;
+  var row = function (label, totes, groups) { return '<tr><td>' + label + '</td><td>' + n(v.levels) + '</td><td>' + n(totes) + '</td><td>' + n(groups) + '</td></tr>'; };
+  return '<h2>' + esc(title || 'AIRROB') + '</h2>' +
+    '<div class="big"><div class="k main"><b>' + n(v.allowTotes) + '</b><span>Allowable totes for AIRROB</span></div>' +
+    '<div class="k"><b>' + n(v.maxTotes) + '</b><span>Total cells for AIRROB' + (pct ? ' · ' + pct + '% usable' : '') + '</span></div></div>' +
+    '<table class="asum"><thead><tr><th>Rack layout</th><th>Levels</th><th>Totes per group</th><th>Groups</th></tr></thead><tbody>' +
+    row('Single-layer', v.totesSingleBay, v.singleBays) + row('Double-layer', v.totesDoubleBay, v.doubleBays) + '</tbody></table>';
 }
 
 </script>
