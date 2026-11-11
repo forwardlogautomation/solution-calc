@@ -702,6 +702,7 @@ function readProjectForm(o, id) {
 var EID = qp('e'), PID0 = qp('p'), CODE0 = qp('s');
 var S = { code: '', s: null, inputs: null, base: null, ref: null, project: null, est: null, me: null, built: false, showF: ls(K + 'showf') === '1', refLive: false };
 var SECTION_NAME = { 'Calc deck': 'Layout', 'AIRROB': 'AIRROB robots', 'Info': 'Flow (for record only, not used in the calculation)' };
+var TEXT_HINT = { flow: 'e.g. Inbound, Outbound, Return', pickup: 'e.g. SHIP, dock door 3', dropoff: 'e.g. IB WH, rack zone A' };
 function draftKey() { return K + 'draft_' + S.code + '_' + (EID || PID0 || 'quick'); }
 
 $('#back').onclick = function () { var p = (S.project && S.project.projectId) || PID0; goBack(p ? 'project.html?p=' + encodeURIComponent(p) : './'); };
@@ -741,7 +742,7 @@ function applyEstimate(d) {
 function withBlanks(code, raw, fresh) {
   var o = SC.cleanInputs(code, raw || {});
   SC.solution(code).fields.forEach(function (f) {
-    if (f.required && (fresh ? !(raw && f.key in raw) : raw && String(raw[f.key] === undefined ? '' : raw[f.key]).trim() === '')) o[f.key] = '';
+    if ((f.required || f.input === 'text') && (fresh ? !(raw && f.key in raw) : raw && String(raw[f.key] === undefined ? '' : raw[f.key]).trim() === '')) o[f.key] = '';
   });
   return o;
 }
@@ -787,7 +788,7 @@ function inputHtml(f) {
     return '<div class="' + cls + '" style="grid-column:1/-1"><label>' + esc(f.label) + '</label><div class="seg sizes" role="radiogroup" aria-label="' + esc(f.label) + '">' +
       opts.map(function (m) { return '<button type="button" role="radio" data-k="' + f.key + '" data-v="' + esc(m) + '" class="' + (m === v ? 'on' : '') + '" aria-checked="' + (m === v) + '">' + esc(m) + '</button>'; }).join('') + '</div></div>';
   }
-  if (f.input === 'text') return '<div class="' + cls + '"><label for="' + id + '">' + esc(f.label) + '</label><input id="' + id + '" data-k="' + f.key + '" maxlength="80" value="' + esc(v) + '"></div>';
+  if (f.input === 'text') return '<div class="' + cls + '"><label for="' + id + '">' + esc(f.label) + '</label><input id="' + id + '" data-k="' + f.key + '" maxlength="80" value="' + esc(v) + '" placeholder="' + esc(TEXT_HINT[f.key] || ('e.g. ' + f.def)) + '"></div>';
   var shown = v === '' ? '' : isPct(f.unit) ? +(v * 100).toFixed(8) : v;
   return '<div class="' + cls + '"><label for="' + id + '"><span>' + esc(f.label) + (f.required ? ' <b class="star">*</b>' : '') + '</span>' + (f.unit ? '<span class="u">' + esc(f.unit === '%' ? '%' : f.unit) + '</span>' : '') + '</label>' +
     '<input id="' + id + '" data-k="' + f.key + '" inputmode="decimal" autocomplete="off" value="' + esc(shown) + '"' + (f.required ? ' required placeholder="Required"' : '') + '></div>';
@@ -808,7 +809,7 @@ function build() {
   h += '</div>';
   h += '<div class="card" id="results"></div>';
   if (S.code === 'apr') h += '<div class="card" id="cmp"></div>';
-  h += '<div class="card"><details class="more" id="consts"><summary>Design constants used</summary><div id="constlist"></div></details></div>';
+  h += '<div class="card"><details class="more" id="consts"><summary id="constsum">Fixed parameters</summary><div id="constlist"></div></details></div>';
   h += footerHtml();
   $('#main').innerHTML = h;
   $$('input[data-k]').forEach(function (i) {
@@ -848,7 +849,7 @@ function recalc(userChange) {
     var lv = SC.lookups(S.code, S.inputs, S.ref.specs);
     S.s.fields.forEach(function (f) { if (f.type === 'lookup') { var el = $('#lk_' + f.key); if (el) el.textContent = f.key in lv ? fmtNum(lv[f.key], f.unit).replace(/<[^>]+>/g, '') : '–'; } });
     $('#hero').innerHTML = '<h2>' + esc(S.s.name) + '</h2><p style="margin:4px 0 0;font-weight:600">Fill in ' + esc(miss.join(', ')) + ' to see the result.</p>';
-    $('#warn').innerHTML = ''; $('#results').innerHTML = ''; if ($('#cmp')) $('#cmp').innerHTML = ''; constList(null); return;
+    $('#warn').innerHTML = ''; $('#results').innerHTML = ''; if ($('#cmp')) $('#cmp').innerHTML = ''; constList(); return;
   }
   if (err) { $('#hero').innerHTML = '<h2>Result</h2><p>' + esc(err) + '</p>'; $('#results').innerHTML = ''; return; }
   S.s.fields.forEach(function (f) { if (f.type === 'lookup') { var el = $('#lk_' + f.key); if (el) el.textContent = fmtNum(v[f.key], f.unit).replace(/<[^>]+>/g, ''); } });
@@ -873,14 +874,57 @@ function recalc(userChange) {
       return '<tr' + (r[0] === 'robotsQuote' ? ' class="key"' : '') + '><td>' + r[1] + '</td><td class="v">' + fmtNum(v[r[0]], '', true) + '</td><td class="v">' + fmtNum(v.noCharge[r[0]], '', true) + '</td></tr>';
     }).join('') + '</table>';
   }
-  constList(v);
+  constList();
 }
-function constList(v) {                        // with no result yet, show the constants from the reference data
-  var cf = S.s.fields.filter(function (f) { return f.type === 'constant'; });
-  if (!v) { v = {}; var cm = SC.constMap(S.ref.constants); (SC_SPEC.constGroups[S.code] || []).forEach(function (g) { var x = cm[g] || {}; Object.keys(x).forEach(function (k) { v[k] = x[k]; }); }); }
-  $('#constlist').innerHTML = cf.length ? '<table class="res">' + cf.map(function (f) { return '<tr><td>' + esc(f.label) + '</td><td class="v">' + fmtNum(v[f.key], f.unit) + unitTxt(f.unit) + '</td></tr>'; }).join('') + '</table>' +
-    '<p class="muted">' + (S.me && S.me.admin ? 'Change these on the <a href="admin.html#constants">Admin page</a>.' : 'Admins change these on the Admin page.') + '</p>'
-    : '<p class="muted">This calculator has no design constants' + (S.s.specTable ? '; the model table is on the Admin page.' : '.') + '</p>';
+/* ---- fixed parameters of this calculator: read-only for engineers, tunable here by Solution Calc admins ---- */
+var GROUP_NOTE = { airrob: 'Shared by AIRROB Standard and Customised' }, TABLE_NAME = { tote: 'Standard tote sizes', wheel: 'Wheel sorter models' };
+function paramRow(attrs, label, unit, value, sub) {
+  var shown = isPct(unit) ? +(value * 100).toFixed(8) : value, u = unit === '%' ? '%' : (unit || '');
+  if (!(S.me && S.me.admin)) return '<tr><td>' + esc(label) + (sub ? '<span class="f">' + esc(sub) + '</span>' : '') + '</td><td class="v">' + fmtNum(value, unit) + unitTxt(unit) + '</td></tr>';
+  return '<div class="cst"><div class="l"><b>' + esc(label) + '</b><span>' + esc(u) + (sub ? ' · ' + esc(sub) : '') + '</span></div>' +
+    '<input inputmode="decimal" ' + attrs + ' data-unit="' + esc(unit || '') + '" data-orig="' + esc(shown) + '" value="' + esc(shown) + '" aria-label="' + esc(label) + '">' +
+    '<button class="btn sm" type="button" disabled>Save</button></div>';
+}
+function constList() {
+  var box = $('#constlist'); if (!box) return;
+  if (box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;   // keep a value being typed
+  var admin = !!(S.me && S.me.admin), groups = SC_SPEC.constGroups[S.code] || [], order = {};
+  S.s.fields.forEach(function (f, i) { order[f.key] = i; });
+  var rows = (S.ref.constants || []).filter(function (c) { return groups.indexOf(c.solution) >= 0; });
+  rows.sort(function (a, b) { return groups.indexOf(a.solution) - groups.indexOf(b.solution) || (order[a.key] || 0) - (order[b.key] || 0); });
+  var wrap = function (inner) { return admin ? inner : '<table class="res">' + inner + '</table>'; };
+  var h = admin ? '<p class="hint" style="margin:4px 0 8px">You can tune these as a Solution Calc admin. A change applies to everyone’s new calculations; saved estimates keep their values. Each change is logged.</p>' : '';
+  if (rows.length) h += wrap(rows.map(function (c) {
+    return paramRow('data-kind="c" data-a="' + esc(c.solution) + '" data-b="' + esc(c.key) + '"', c.label, c.unit, c.value, GROUP_NOTE[c.solution] || '');
+  }).join(''));
+  if (S.s.specTable) {
+    var by = {}; (S.ref.specs || []).forEach(function (r) { if (r.table === S.s.specTable) (by[r.model] = by[r.model] || []).push(r); });
+    Object.keys(by).forEach(function (m) {
+      h += '<h2 style="margin:14px 0 4px;font-size:11px">' + esc(TABLE_NAME[S.s.specTable] || S.s.specTable) + ' – ' + esc(m) + '</h2>' + wrap(by[m].map(function (r) {
+        return paramRow('data-kind="s" data-a="' + esc(r.table) + '" data-m="' + esc(r.model) + '" data-b="' + esc(r.key) + '"', r.label, r.unit, r.value);
+      }).join(''));
+    });
+  }
+  if (!rows.length && !S.s.specTable) h += '<p class="muted">This calculator has no fixed parameters.</p>';
+  else if (!admin) h += '<p class="muted">Only Solution Calc admins (set in the control centre) can tune these.</p>';
+  box.innerHTML = h;
+  $('#constsum').textContent = admin ? 'Fixed parameters – tune' : 'Fixed parameters';
+  if (admin) $$('.cst input', box).forEach(function (i) {
+    var b = i.parentNode.querySelector('button');
+    i.oninput = function () { b.disabled = i.value.trim() === i.dataset.orig; };
+    b.onclick = function () {
+      var n = Number(i.value.replace(/,/g, '').trim());
+      if (i.value.trim() === '' || !isFinite(n)) { toast('Enter a number', true); return; }
+      if (isPct(i.dataset.unit)) n = n / 100;
+      if (!confirm('Change "' + i.getAttribute('aria-label') + '" from ' + i.dataset.orig + ' to ' + i.value.trim() + '? Everyone’s new calculations will use it.')) return;
+      b.disabled = true; b.textContent = 'Saving…';
+      var c = i.dataset.kind === 'c' ? api('adminSaveConstant', [i.dataset.a, i.dataset.b, n]) : api('adminSaveSpec', [i.dataset.a, i.dataset.m, i.dataset.b, n]);
+      c.then(function (list) {
+        if (i.dataset.kind === 'c') S.ref.constants = list; else S.ref.specs = list;
+        setRefData(S.ref); i.blur(); toast('Saved. New calculations use ' + i.value.trim() + '.'); recalc();
+      }).catch(function (e) { b.disabled = false; b.textContent = 'Save'; fail(e); });
+    };
+  });
 }
 
 /* ---- actions ---- */
