@@ -174,6 +174,17 @@ details.more summary{cursor:pointer;font-weight:700;color:var(--grey);font-size:
   .rep .estblock{break-before:page}
   .rep .estblock:first-of-type{break-before:auto}
 }
+
+.asum .sr{display:grid;grid-template-columns:1fr;gap:4px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.22)}
+.asum .sl{font-size:13px;font-weight:600;opacity:.92}
+.asum .sv{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px}.asum .sv b{font-size:20px;font-weight:800;margin-right:3px}
+.asum .tot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0 2px}
+.asum .tot .sl{flex:1 1 auto;min-width:0}
+.asum .hv{flex:0 0 auto;white-space:nowrap;background:#FFF4B8;color:#3A3200;font-weight:800;font-size:24px;border-radius:9px;padding:4px 12px;min-width:110px;text-align:center}
+.asum .tot.main .hv{font-size:clamp(26px,8vw,34px)}
+@media (min-width:640px){.asum .sr{grid-template-columns:240px 1fr;align-items:center}}
+@media print{.asum .sr{border-bottom-color:var(--line)}.asum .hv{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+details.intdet>summary{cursor:pointer;font-weight:700;color:var(--grey);font-size:13px;text-transform:uppercase;letter-spacing:.8px}
 </style>
 </head>
 <body>
@@ -709,6 +720,20 @@ function readProjectForm(o, id) {
   return { projectId: id || '', name: $('#pf_name', o).value.trim(), client: $('#pf_client', o).value.trim(), site: $('#pf_site', o).value.trim(), pm: $('#pf_pm', o).value.trim(), status: $('#pf_status', o).value };
 }
 
+/* AIRROB sales summary: the layout of the workbook's result box (racks by layer, total cells, allowable totes) */
+function isAirrob(code) { return /^airrob/.test(code || ''); }
+function airrobSummary(v, title) {
+  var n = function (x) { return fmtNum(x).replace(/<[^>]+>/g, ''); };
+  var row = function (label, levels, totes, groups) {
+    return '<div class="sr"><div class="sl">' + label + '</div><div class="sv"><span><b>' + n(levels) + '</b> levels</span><span><b>' + n(totes) + '</b> totes per group</span><span><b>' + n(groups) + '</b> groups</span></div></div>';
+  };
+  return '<h2>' + esc(title || 'AIRROB') + '</h2><div class="asum">' +
+    row('Single-layer display of racks', v.levels, v.totesSingleBay, v.singleBays) +
+    row('Double-layer display of racks', v.levels, v.totesDoubleBay, v.doubleBays) +
+    '<div class="tot"><div class="sl">Total cells that can be used for AIRROB</div><div class="hv">' + n(v.maxTotes) + '</div></div>' +
+    '<div class="tot main"><div class="sl">Allowable number of totes for AIRROB</div><div class="hv">' + n(v.allowTotes) + '</div></div></div>';
+}
+
 </script>
 <script>
 var EID = qp('e'), PID = qp('p'), Q = EID ? { estimateId: EID } : { projectId: PID }, CACHE = 'rep_' + (EID || PID), S = { d: null };
@@ -743,12 +768,16 @@ function estBlock(e) {
   var fby = {}; s.fields.forEach(function (f) { fby[f.key] = f; });
   var h = '<section class="estblock"><div class="card"><div class="rephead"><div><h3>' + esc(s.name) + '</h3><div class="muted">' + esc(e.title) + ' · v' + e.version + ' · ' + esc(userName(e.user)) + ' · ' + esc(fmtDate(e.timestamp, true)) + '</div></div>' +
     '<a class="btn sec sm noprint" href="calc.html?e=' + encodeURIComponent(e.estimateId) + '">Open</a></div></div>';
-  h += '<div class="card hero"><h2>Key results</h2><div class="big">' + [s.keyResult].concat(s.extra).map(function (k, i) {
+  var air = isAirrob(e.solution);
+  if (air) h += '<div class="card hero">' + airrobSummary(vals, 'Result') + '</div>';
+  else h += '<div class="card hero"><h2>Key results</h2><div class="big">' + [s.keyResult].concat(s.extra).map(function (k, i) {
     var f = fby[k]; return '<div class="k' + (i ? '' : ' main') + '"><b>' + fmtNum(vals[k], f.unit) + (f.unit && f.unit !== 'qty' ? ' <span class="u">' + esc(f.unit) + '</span>' : '') + '</b><span>' + esc(f.label) + '</span></div>';
   }).join('') + '</div></div>';
   var w = (e.results || {})._warnings || [];
   if (w.length) h += '<div class="warnbox"><b>Warnings when saved</b><ul>' + w.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
   if (e.notes) h += '<div class="card"><h2>Notes</h2><div style="white-space:pre-wrap">' + esc(e.notes) + '</div></div>';
+  if (air && !S.showInt) return h + '<div class="card noprint"><button class="btn sec sm" type="button" data-int="1">Show internal calculation details</button> <span class="muted">Hidden from print and Save to Drive unless shown.</span></div></section>';
+  if (air) h += '<div class="card noprint"><button class="btn sec sm" type="button" data-int="0">Hide internal calculation details</button></div>';
   h += '<div class="card"><div class="two"><div><h2>Inputs</h2>' + bySection(s, ['input', 'lookup']).map(function (x) { return table(x[1], vals, SECTION_NAME[x[0]] || x[0]); }).join('') + '</div>' +
     '<div><h2>Results</h2>' + bySection(s, ['calc', 'result']).map(function (x) { return table(x[1], vals, SECTION_NAME[x[0]] || x[0]); }).join('') + '</div></div></div>';
   if (e.solution === 'apr' && e.results.noCharge) {
@@ -775,6 +804,7 @@ function render() {
     var s = sol(e.solution); return '<tr><td>' + esc(s ? s.short : e.solution) + ' v' + e.version + ' – ' + esc(e.title) + '<span class="f">' + esc(userName(e.user)) + ' · ' + esc(fmtDate(e.timestamp, true)) + '</span></td><td class="v">' + fmtNum(e.keyResult) + '</td></tr>'; }).join('') + '</table></div>';
   h += footerHtml();
   $('#main').innerHTML = h;
+  $$('button[data-int]').forEach(function (b) { b.onclick = function () { S.showInt = b.dataset.int === '1'; var y = window.scrollY; render(); window.scrollTo(0, y); }; });
 }
 
 $('#drive').onclick = function () {
